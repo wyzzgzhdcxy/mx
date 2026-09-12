@@ -1,0 +1,1 @@
+build-release.ps1 语法 OK

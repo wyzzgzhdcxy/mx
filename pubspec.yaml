@@ -1,0 +1,47 @@
+name: mx
+description: "密信（Mx）- 基于 ntfy 的跨平台群聊客户端"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # --- 网络 ---
+  # 用 dart:io HttpClient 原生实现 ntfy 长连接，不引 http/dio 重型封装。
+  # 但 web 平台没有 dart:io，需要 package:http 走浏览器 fetch/XHR。
+  http: ^1.2.2
+
+  # --- 持久化 ---
+  # 跨平台键值存储（web 走 localStorage，桌面/移动走文件）
+  shared_preferences: ^2.3.3
+
+  # --- 平台能力 ---
+  # 打开系统浏览器 / 打开本地文件
+  url_launcher: ^6.3.1
+  # 选择文件发送附件（全平台）
+  file_picker: ^8.1.6
+  # 路径解析（应用数据目录）
+  path_provider: ^2.1.5
+  path: ^1.9.0
+
+  # --- 二维码 ---
+  # 生成群聊二维码（扫码加入）
+  qr_flutter: ^4.1.0
+  # 识别二维码图片
+  image_picker: ^1.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- 出网权限。macOS 沙箱默认禁止网络访问，不加这两条应用装上也连不上服务器
+	     （表现是"一直连接中"，很容易误判成代码 bug）。 -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<!-- 用户通过系统文件选择器选中的文件。本项目要选任意文件作附件发送，
+	     这个权限足够，不需要放开整个磁盘。 -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<!-- 相册读取（选图片作附件）。 -->
+	<key>com.apple.security.personal-information.photos-library</key>
+	<true/>
+</dict>
+</plist>

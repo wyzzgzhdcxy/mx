@@ -5,20 +5,33 @@
 
 | 平台 | 产物 | 状态 |
 | --- | --- | --- |
-| Android | `.apk`（arm64-v8a + armeabi-v7a） | ✅ 已构建（**32.2 MB**，原 50.2 MB，-36%） |
+| Android | `.apk`（**仅 arm64-v8a**） | ✅ 已构建（**17.7 MB**，原 50.2 MB，**-65%**） |
 | Windows | `.exe`（含全部依赖的发布目录） | ✅ 已构建（28 MB） |
 | Web | 静态站点（可任意静态托管） | ✅ 已构建（**31.9 MB**，原 41 MB，-20%） |
-| Linux | 可执行文件 + bundle 目录 | ⏳ 需在 Linux 主机执行一条命令（见下） |
+| Linux | 可执行文件 + bundle 目录 | ⏳ 配置就绪，需在 Linux 主机构建（见下） |
+| macOS | `.app` | ⏳ 配置就绪，**必须在 macOS 上构建**（见下） |
+| iOS | `.ipa` / `.app` | ⏳ 配置就绪，**必须在 macOS 上构建**（见下） |
 
-> 当前工作环境是 Windows，因此 Android / Windows / Web 三个产物已在本机构建完成，全部收在 `dist\`。
-> Linux 产物受 Flutter 限制**只能在 Linux 主机上构建**（`build linux` only supported on Linux hosts），
-> 工程配置已就绪，在任意 Linux 环境（含 WSL）里执行 `flutter build linux --release` 即可。
+> ### 平台构建的硬性限制
+>
+> Flutter 的**编译产物与宿主系统强绑定**，这是设计上的限制，不是配置问题：
+>
+> | 平台 | 能否在 Windows 上构建 | 原因 |
+> | --- | --- | --- |
+> | Linux | ❌ | 需 Linux 工具链（clang、GTK3、ninja），Flutter 明确拒绝跨平台构建 |
+> | macOS | ❌ | 需 Xcode 与 macOS SDK（Cocoa/AppKit） |
+> | iOS | ❌ | 需 Xcode、iOS SDK、以及**代码签名证书**（Apple 开发者账号） |
+>
+> 因此本机（Windows）能交付的是 **Android / Windows / Web** 三个平台，
+> Linux 可经 WSL 构建。macOS 与 iOS 的工程配置已全部就绪
+> （含 Info.plist 权限、entitlements 沙箱权限、ATS 明文 HTTP 例外），
+> **在任意一台 Mac 上执行一条命令即可出包，无需再改配置**。
 
 ### 本次已产出的包
 
 ```text
 dist\
-├── android\密信-arm64-v7a-release.apk   32.2 MB   io.heckel.mx / 密信 / minSdk 26
+├── android\密信-arm64-v8a-release.apk   17.7 MB   io.heckel.mx / 密信 / minSdk 26
 ├── windows\                             28 MB     mx.exe + 全部运行库
 └── web\                               31.9 MB     静态站点，任意静态服务器可托管
 ```
@@ -29,7 +42,7 @@ Windows 产物已实测启动（`mx.exe` 进程正常驻留）；APK 已通过 `
 package: name='io.heckel.mx'  versionCode='1'  versionName='1.0.0'
 minSdkVersion: 26    targetSdkVersion: 36    compileSdkVersion: 36
 application-label: '密信'
-native-code: 'arm64-v8a' 'armeabi-v7a' 'x86_64'
+native-code: 'arm64-v8a'                      ← 仅 64 位 ARM，单一架构
 Verified using v2 scheme (APK Signature Scheme v2): true
 ```
 
@@ -38,35 +51,45 @@ Verified using v2 scheme (APK Signature Scheme v2): true
 > 没有则回退 debug 以保证开箱可用。**上架前请补上 `key.properties`**，
 > 否则后续换正式密钥会因签名不一致而无法覆盖安装。
 
+> ⚠️ **这个包只支持 64 位 ARM 设备。** 近几年的 Android 真机（含全部国产机型）都是
+> arm64-v8a，可直接安装。但极老的 32 位机型、以及 Intel/AMD 处理器上的模拟器装不上。
+> 需要兼容时用
+> `.\scripts\build-release.ps1 -Only android -TargetPlatform 'android-arm,android-arm64'`
+> 重新构建（体积约 32 MB）。
+
 ### 体积优化说明
 
 三个平台的包都做过针对性瘦身，原则是**只删确定零引用的东西**，不碰运行时按需加载的资源。
 
-**Android：剔除 x86_64 引擎库 → 50.2 MB 降到 32.2 MB（-36%）。**
-APK 体积的 **96.9% 是 native 库**，且几乎全是 Flutter 引擎本体：
+**Android：全架构 50.2 MB → 仅 arm64 17.7 MB（-65%）。**
+APK 体积的 **95% 是 native 库**，且几乎全是 Flutter 引擎本体：
 
-| 组成 | 压缩后 | 占比 |
+| 组成 | 解压后 | 占比 |
 | --- | --- | --- |
-| `lib/arm64-v8a` | 16.77 MB | 52.3% |
-| `lib/armeabi-v7a` | 14.30 MB | 44.6% |
-| dex 代码 | 0.42 MB | 1.3% |
-| flutter_assets | 0.22 MB | 0.7% |
-| `res/` | 0.12 MB | 0.4% |
-| `lib/x86_64` | 0.12 MB | 0.4% |
-| 其他（签名等） | 0.10 MB | 0.3% |
+| `lib/arm64-v8a/libflutter.so` | 11.20 MB | 63.3% |
+| `lib/arm64-v8a/libapp.so` | 5.44 MB | 30.7% |
+| `lib/arm64-v8a/libdartjni.so` | 0.13 MB | 0.7% |
+| `lib/arm64-v8a/libdatastore_shared_counter.so` | 0.01 MB | 0.1% |
+| dex 代码 + assets + res + 签名 | 约 0.9 MB | 5.2% |
 
-原包里 x86_64 引擎库占 18.1 MB，而它**只对 Intel/AMD 处理器的模拟器有用**，真机
-（含全部国产手机）都是 ARM，因此用 `--target-platform android-arm,android-arm64` 剔除。
+`libflutter.so` 是 Flutter 引擎运行时，`libapp.so` 是应用代码的 AOT 产物——**这两个都不可删减**。
+所以这里没有"挤水分"的空间，只能靠减少架构数量。
 
-用 Flutter 参数而非在 `build.gradle.kts` 写 `abiFilters`/`splits`，是为了不与
-`--split-per-abi` 冲突——两者同时写会导致产物错乱。
+优化分两层，**缺一不可**：
 
-> 注：`--target-platform` 只控制 Flutter 引擎的 `.so`，管不到第三方插件的 native 库。
-> 实测残留 `lib/x86_64` 仅 0.12 MB（某插件的轻量库），收益微小，不值得为它引入
-> 插件级 ABI 过滤的兼容性风险，故保留。
->
-> 若要把单包再压一半，可用 `.\scripts\build-release.ps1 -Only android -SplitAbi`
-> 产出两个按架构拆分的 APK（各约 16 MB / 15 MB），代价是用户需按机型选择安装包。
+1. **Flutter 层**：`--target-platform android-arm64` 剔除另两种架构的 `libflutter.so`
+   与 `libapp.so`（原本 x86_64 引擎 18.1 MB + v7a 引擎 14.3 MB）。
+2. **Gradle 层**：`ndk.abiFilters` + `packaging.jniLibs.excludes` 剔除插件带来的其它 ABI。
+
+> ⚠️ **为什么必须两层都做**：`--target-platform` **只控制 Flutter 引擎自己的 `.so`**，
+> 管不到第三方插件从 AAR 里带进来的 native 库。实测 `shared_preferences` 的 DataStore
+> 后端会带 `libdartjni.so` / `libdatastore_shared_counter.so` 的 v7a 与 x86_64 变体——
+> 只做第一层时，包里仍会残留 `armeabi-v7a` 和 `x86_64` 两个目录（多占 0.2 MB），
+> 且 `aapt2` 的 `native-code` 字段仍会列出这三种架构。
+
+> ⚠️ `abiFilters` 与 `--split-per-abi` **互相冲突**（两种机制都在决定 ABI 集合，
+> 同时用会导致产物错乱）。本项目固定出单一 arm64 通用包，故可安全使用；
+> 若将来要拆包，必须先移除 `build.gradle.kts` 里的这段配置。
 
 **Web：删调试符号 + 跳过 wasm 预检 → 40.1 MB 降到 31.9 MB（-20%）。**
 `build/web` 下 6 个 `.symbols` 文件（共 8.2 MB）是 wasm/js 的符号表，只在分析崩溃栈
@@ -84,13 +107,98 @@ APK 体积的 **96.9% 是 native 库**，且几乎全是 Flutter 引擎本体：
 
 ### 构建 Linux 包
 
+需在 Linux 主机或 WSL 里执行（Flutter 不允许跨平台构建 Linux 产物）。
+
+**前置依赖**（Debian/Ubuntu 系）：
+
 ```bash
-# 在 Linux 主机或 WSL 里（需先装 Flutter SDK）
+sudo apt update && sudo apt install -y \
+    clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+    libstdc++-12-dev
+```
+
+**构建**：
+
+```bash
 flutter pub get
 ./scripts/mklinks-linux.sh          # 可选：若报插件链接错误再执行
 flutter build linux --release
 # 产物：build/linux/x64/release/bundle/
+#   ├── mx            ← 可执行文件
+#   └── lib/          ← 依赖库，必须与 mx 一起分发
 ```
+
+把 `bundle/` 整个目录拷到 `dist/linux/` 即可。**注意别只拷 `mx` 那一个文件**——
+它依赖同目录 `lib/` 下的库，单独拿走会启动失败。
+
+> RHEL/Rocky 系（如本机的 WSL Rocky-9）把上面的 `apt` 换为：
+> `sudo dnf install -y clang cmake ninja-build pkgconf-pkg-config gtk3-devel liblzma-devel`
+> 另需 GTK3 运行时：`sudo dnf install -y gtk3`
+
+### 构建 macOS 包
+
+**必须在 macOS 上执行**（需 Xcode 与 macOS SDK）。
+
+```bash
+# 1. 装 Xcode 命令行工具
+xcode-select --install
+
+# 2. 拉依赖并构建
+flutter pub get
+flutter build macos --release
+# 产物：build/macos/Build/Products/Release/密信.app
+```
+
+分发有两种形态：
+
+```bash
+# 形态 A：直接给 .app（对方拖进"应用程序"即可，首次打开需右键→打开）
+#         但未签名的 .app 在对方机器上会被 Gatekeeper 拦截
+
+# 形态 B：打成 dmg（更正式，需先安装 create-dmg）
+brew install create-dmg
+create-dmg \
+  --volname "密信" \
+  --window-size 600 400 \
+  --icon-size 100 \
+  --app-drop-link 450 185 \
+  "dist/macos/密信-1.0.0.dmg" \
+  "build/macos/Build/Products/Release/密信.app"
+```
+
+> **签名与公证**：当前工程用 debug 签名占位。要分发给他人，需 Apple 开发者账号
+> （$99/年）配置 `DEVELOPMENT_TEAM` 并做 notarization，否则对方需手动绕过 Gatekeeper
+> （右键 → 打开，或 `xattr -dr com.apple.quarantine /Applications/密信.app`）。
+> 自用或内部分发可忽略这一步。
+
+### 构建 iOS 包
+
+**必须在 macOS 上执行**，且需要 **Apple 开发者账号**才能装到真机或上架。
+
+```bash
+# 1. 装 Xcode（App Store 完整版，非仅命令行工具）
+# 2. 拉依赖
+flutter pub get
+
+# 3a. 无签名构建（只验证能否编译通过，产物不能装真机）
+flutter build ios --release --no-codesign
+
+# 3b. 真机 / 上架
+#     先用 Xcode 打开 ios/Runner.xcworkspace 配置签名团队：
+#       Runner → Signing & Capabilities → Team 选你的开发者账号
+#     然后：
+flutter build ipa --release
+# 产物：build/ios/ipa/密信.ipa
+```
+
+**上架 App Store 还需**：
+- 在 [App Store Connect](https://appstoreconnect.apple.com) 创建应用记录（Bundle ID 需与 `io.heckel.mx` 一致）
+- 准备 App 图标（`ios/Runner/Assets.xcassets/AppIcon.appiconset/`，需全尺寸）、启动图、隐私政策链接
+- 通过 Xcode Organizer 或 `xcrun altool` 上传，走 TestFlight 内测后再提交审核
+
+> ⚠️ **iOS 的 ATS 例外已被显式开启**（`Info.plist` 的 `NSAllowsArbitraryLoads`），
+> 因为默认服务端是明文 HTTP。**上架时 Apple 会要求说明理由，且可能被拒。**
+> 正式提交前建议把服务端换成 HTTPS，并删除该配置段。
 
 ---
 
@@ -180,21 +288,32 @@ Linux 主机上对应的脚本是 `scripts/mklinks-linux.sh`。
 # Windows（发布版）
 E:\application\flutter\bin\flutter.bat build windows --release
 
-# Android APK（发布版，推荐：只出 ARM，体积少 36%）
-E:\application\flutter\bin\flutter.bat build apk --release --target-platform android-arm,android-arm64
+# Android APK（发布版，推荐：仅 arm64，17.7 MB）
+# 注意：Gradle 层已配置 abiFilters，这里必须与之一致，否则插件 native 库仍会漏进来
+E:\application\flutter\bin\flutter.bat build apk --release --target-platform android-arm64
 
-# Android 分架构 APK（每个约 16 MB / 15 MB，用户需按机型选包）
-E:\application\flutter\bin\flutter.bat build apk --release --split-per-abi `
-    --target-platform android-arm,android-arm64
+# Android APK，兼容老 32 位机型（约 32 MB）
+# 用这个之前，要先移除 android/app/build.gradle.kts 里的 ndk.abiFilters，否则会错乱
+E:\application\flutter\bin\flutter.bat build apk --release --target-platform android-arm,android-arm64
 
 # Web（推荐带上 --no-wasm-dry-run，省一次完整编译）
 E:\application\flutter\bin\flutter.bat build web --release --no-wasm-dry-run
 
-# Linux（需在 Linux 环境执行）
-E:\application\flutter\bin\flutter.bat build linux --release
+# Linux（仅在 Linux/WSL 环境可用）
+flutter build linux --release
+
+# macOS（仅在 macOS 可用）
+flutter build macos --release
+
+# iOS（仅在 macOS 可用，上架需配签名团队）
+flutter build ios --release --no-codesign
+flutter build ipa --release
 ```
 
-> Android 构建耗时较长（本机首次全量编译约 22 分钟，主要是插件编译与 dex 合并）。
+> 建议直接用脚本，ABI 参数与 Gradle 配置的一致性由它维护：
+> `.\scripts\build-release.ps1 -Only android`（默认 arm64）
+>
+> Android 构建耗时较长（首次全量编译约 22 分钟，增量约 40 秒，主要是插件编译与 dex 合并）。
 > 加 `-v` 可看详细进度；`build\app\outputs\flutter-apk\` 下的产物不带进度输出，
 > 中途怀疑卡住时可查 `build\` 目录的文件时间戳与 Gradle daemon 的 CPU 占用。
 
